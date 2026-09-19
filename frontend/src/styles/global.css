@@ -829,7 +829,96 @@ table.data-table td.wrap {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin: 14px 0 8px;
+}
+
+/* 外包合同：服务范围公厕选择 */
+.scope-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scope-options {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--surface-alt);
+}
+
+.scope-group + .scope-group {
+  margin-top: 6px;
+}
+
+.scope-district {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 2px 4px;
+}
+
+.scope-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 12px;
+}
+
+.scope-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: normal;
+}
+
+/* 月度考核测算 */
+.assess-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.assess-cell {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface-alt);
+}
+
+.assess-value {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.settlement-summary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 28px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  font-size: 15px;
+}
+
+.money-strong {
+  color: #b45309;
+  font-size: 17px;
+}
+
+.money-deduct {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.money-bonus {
+  color: var(--success);
+  font-weight: 600;
 }
 
 @media (max-width: 860px) {

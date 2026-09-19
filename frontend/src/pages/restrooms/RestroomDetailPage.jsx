@@ -125,6 +125,20 @@ export default function RestroomDetailPage() {
                     { label: '蹲位数量', value: `${restroom.stall_count} 个` },
                     { label: '洗手盆数量', value: `${restroom.basin_count} 个` },
                     { label: '无障碍设施', value: restroom.has_accessible ? '已配置' : '未配置' },
+                    {
+                      label: '保洁外包合同',
+                      value: restroom.active_contracts?.length ? (
+                        <div className="inline">
+                          {restroom.active_contracts.map((contract) => (
+                            <Link key={contract.id} className="tag tag-primary" to={`/contracts/${contract.id}`}>
+                              {contract.vendor_name} · {contract.code}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        '未纳入外包合同'
+                      ),
+                    },
                     { label: '备注', value: restroom.remark || '无' },
                     { label: '建档时间', value: formatDateTime(restroom.created_at) },
                   ]}

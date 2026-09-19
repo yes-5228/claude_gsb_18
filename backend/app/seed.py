@@ -1,7 +1,7 @@
 """演示数据生成：首次启动时写入，便于快速体验各模块。"""
 
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,11 +15,21 @@ from app.core.constants import (
     RestroomStatus,
     Shift,
 )
-from app.models import Restroom
+from app.models import Issue, Restroom
+from app.schemas.contract import ContractCreate
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
-from app.services import inspection_service, issue_service, restroom_service
+from app.schemas.settlement import SettlementConfirm, SettlementCreate
+from app.schemas.vendor import VendorCreate
+from app.services import (
+    contract_service,
+    inspection_service,
+    issue_service,
+    restroom_service,
+    settlement_service,
+    vendor_service,
+)
 
 RANDOM_SEED = 20240913
 
@@ -79,6 +89,14 @@ CATEGORY_BY_ITEM = {
     "墙面门窗卫生": IssueCategory.CLEANING,
 }
 
+# 外包合同规划：(单位名, 联系人, 服务区域, 月费用, 覆盖的公厕序号)
+VENDOR_SPECS = [
+    ("城东环卫服务有限公司", "马建华", ["城东区"], 42000.0, [0, 1, 2]),
+    ("西城美洁物业管理有限公司", "林晓峰", ["城西区"], 48000.0, [3, 4, 5]),
+    ("滨江新城环境工程有限公司", "赵雅琴", ["滨江新区"], 36000.0, [6, 7]),
+]
+OLD_DISTRICT_VENDOR = ("老城保洁服务队", "钱德海", ["老城区"], 18000.0, [8, 9])
+
 
 def _build_items(rng: random.Random, quality: float) -> list[InspectionItem]:
     items: list[InspectionItem] = []
@@ -129,7 +147,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
     quality_by_restroom = {room.id: rng.uniform(7.4, 9.8) for room in restrooms}
     inspection_ids: list[tuple[int, int]] = []  # (restroom_id, inspection_id)
 
-    for offset in range(13, -1, -1):
+    for offset in range(44, -1, -1):
         day = now - timedelta(days=offset)
         for room in restrooms:
             if room.status == RestroomStatus.CLOSED:
@@ -177,6 +195,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
             IssueCreate(
                 restroom_id=restroom_id,
                 inspection_id=inspection_id,
+                report_time=summary.inspect_time,
                 title=title,
                 description=f"巡查得分 {summary.score} 分（{summary.grade}），检查项「{problem_item}」不达标，请安排整改。",
                 category=category,
@@ -190,7 +209,84 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
         created += 1
         _advance_issue(db, issue.id, age_days, rng)
 
+    _seed_contracts(db, restrooms, now)
+
     return created
+
+
+def _seed_contracts(db: Session, restrooms: list, now: datetime) -> None:
+    """登记外包单位与合同，并为历史月份生成考核结算单。"""
+    specs = VENDOR_SPECS + [OLD_DISTRICT_VENDOR]
+    contracts = []
+    for index, (name, contact, districts, fee, room_indexes) in enumerate(specs):
+        vendor = vendor_service.create_vendor(
+            db,
+            VendorCreate(
+                name=name,
+                contact_person=contact,
+                contact_phone=f"139{index:08d}",
+                address=f"{districts[0]}环卫大厦 {index + 1} 层",
+                qualification="环卫保洁服务一级资质" if index < 2 else "环卫保洁服务二级资质",
+            ),
+        )
+        scope_ids = [restrooms[i].id for i in room_indexes]
+        # 老城区合同年初签订、上月到期，其余覆盖整个年度
+        start = date(now.year, 1, 1)
+        end = (
+            date(now.year, now.month, 1) - timedelta(days=1)
+            if index == len(specs) - 1
+            else date(now.year, 12, 31)
+        )
+        contract = contract_service.create_contract(
+            db,
+            ContractCreate(
+                vendor_id=vendor.id,
+                name=f"{districts[0]}公厕保洁外包服务合同",
+                service_scope=f"{ '、'.join(districts) }共 {len(scope_ids)} 座公厕日常保洁、耗材补给与垃圾清运",
+                scope_districts=districts,
+                start_date=start,
+                end_date=end,
+                signed_date=date(now.year, 1, 1),
+                monthly_fee=fee,
+                restroom_ids=scope_ids,
+            ),
+        )
+        contracts.append(contract)
+
+    # 为最近两个月生成结算单：上月已结算、本月已考核待结算
+    first_of_month = now.replace(day=1)
+    prev_month_end = first_of_month - timedelta(days=1)
+    prev_year, prev_month = prev_month_end.year, prev_month_end.month
+    for index, contract in enumerate(contracts):
+        if contract.start_date > date(prev_year, prev_month, 1):
+            continue
+        settled = settlement_service.assess_settlement(
+            db,
+            contract.id,
+            SettlementCreate(
+                period_year=prev_year,
+                period_month=prev_month,
+                assessor="考核组",
+                assess_remark="按当月巡查与整改数据自动核算，已复核",
+            ),
+        )
+        settlement_service.confirm_settlement(
+            db,
+            settled.id,
+            SettlementConfirm(operator="财务科", remark="上月费用已随月度请款支付"),
+        )
+        # 本月结算单：前两份正常，第三份留待系统中演示「已考核」
+        if index < 3 and contract.start_date <= now.date():
+            settlement_service.assess_settlement(
+                db,
+                contract.id,
+                SettlementCreate(
+                    period_year=now.year,
+                    period_month=now.month,
+                    assessor="考核组",
+                    assess_remark="本月巡查数据持续更新中，结算前可重新考核",
+                ),
+            )
 
 
 def _advance_issue(db: Session, issue_id: int, age_days: int, rng: random.Random) -> None:
@@ -205,6 +301,22 @@ def _advance_issue(db: Session, issue_id: int, age_days: int, rng: random.Random
             )
         )
     if age_days >= 3:
+        # 约三成问题首次验收被驳回，整改后重新提交，形成验收驳回扣款记录
+        if rng.random() < 0.3:
+            steps.append(
+                (
+                    IssueStatus.REVIEWING.value,
+                    "整改责任人",
+                    "整改完成，提交巡查员验收",
+                )
+            )
+            steps.append(
+                (
+                    IssueStatus.PROCESSING.value,
+                    "巡查员",
+                    "验收驳回：整改不彻底，需返工",
+                )
+            )
         steps.append(
             (
                 IssueStatus.REVIEWING.value,
@@ -226,3 +338,29 @@ def _advance_issue(db: Session, issue_id: int, age_days: int, rng: random.Random
             )
         except Exception:  # noqa: BLE001  演示数据允许跳过不合法的流转
             break
+
+    # 整改流水时间默认取当前时间，这里按上报时间逐日顺延，
+    # 使历史月份的驳回、闭环能被月度考核正确归集
+    issue = issue_service.get_issue(db, issue_id)
+    base = issue.report_time
+    timeline = [base + timedelta(days=index) for index in range(len(issue.records))]
+    closed_at = timeline[-1] if issue.status == IssueStatus.CLOSED.value else None
+    db.commit()
+    db.flush()
+    # updated_at 带 onupdate，ORM 赋值会被覆盖，这里用 Core SQL 直改时间
+    from sqlalchemy import update as sql_update
+
+    from app.models import RectificationRecord
+
+    for record, when in zip(issue.records, timeline, strict=True):
+        db.execute(
+            sql_update(RectificationRecord)
+            .where(RectificationRecord.id == record.id)
+            .values(created_at=when)
+        )
+    db.execute(
+        sql_update(Issue)
+        .where(Issue.id == issue_id)
+        .values(updated_at=timeline[-1], closed_at=closed_at)
+    )
+    db.commit()

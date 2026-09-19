@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=__version__,
-    description="公厕台账、保洁巡查、问题上报与整改跟踪一体化服务",
+    description="公厕台账、保洁巡查、问题整改与外包合同考核结算一体化服务",
     lifespan=lifespan,
 )
 

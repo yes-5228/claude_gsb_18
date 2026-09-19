@@ -12,7 +12,8 @@ from app.core.constants import OPEN_ISSUE_STATUSES
 from app.core.database import get_db
 from app.schemas.common import MessageOut, Page
 from app.schemas.issue import IssueCreate, IssueOut, IssueStatusUpdate, IssueUpdate
-from app.services import issue_service
+from app.schemas.settlement import SettlementTraceItem
+from app.services import issue_service, settlement_service
 
 router = APIRouter(prefix="/issues", tags=["问题上报"])
 
@@ -121,6 +122,32 @@ def add_record(
         remark=payload.remark,
     )
     return issue_service.to_out(issue)
+
+
+@router.get(
+    "/{issue_id}/settlements",
+    response_model=list[SettlementTraceItem],
+    summary="反查该问题涉及的月度考核扣款",
+)
+def issue_settlements(
+    issue_id: int, db: Annotated[Session, Depends(get_db)]
+) -> list[SettlementTraceItem]:
+    issue_service.get_issue(db, issue_id)
+    hits = settlement_service.list_by_issue(db, issue_id)
+    return [
+        SettlementTraceItem(
+            settlement_id=row.id,
+            settlement_code=row.code,
+            contract_id=row.contract_id,
+            contract_name=row.contract.name,
+            vendor_name=row.contract.vendor.name,
+            period=row.period,
+            status=row.status,
+            payable_amount=row.payable_amount,
+            evidences=matched,
+        )
+        for row, matched in hits
+    ]
 
 
 @router.delete("/{issue_id}", response_model=MessageOut, summary="删除问题")

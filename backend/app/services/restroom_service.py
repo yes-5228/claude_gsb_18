@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 from app.core.constants import OPEN_ISSUE_STATUSES
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models import Inspection, Issue, Restroom
-from app.schemas.restroom import RestroomCreate, RestroomDetail, RestroomOut, RestroomUpdate
+from app.schemas.restroom import (
+    CoveringContract,
+    RestroomCreate,
+    RestroomDetail,
+    RestroomOut,
+    RestroomUpdate,
+)
+from app.services import contract_service
 
 SORTABLE_FIELDS = {
     "code": Restroom.code,
@@ -140,6 +147,7 @@ def get_restroom_detail(db: Session, restroom_id: int) -> RestroomDetail:
     ) or 0
 
     base = RestroomOut.model_validate(restroom).model_dump()
+    covering = contract_service.restroom_contracts(db, restroom_id)
     return RestroomDetail(
         **base,
         inspection_count=inspection_count,
@@ -148,6 +156,19 @@ def get_restroom_detail(db: Session, restroom_id: int) -> RestroomDetail:
         avg_score=round(float(avg_score), 1) if avg_score is not None else None,
         open_issue_count=open_issue_count,
         total_issue_count=total_issue_count,
+        active_contracts=[
+            CoveringContract(
+                id=contract.id,
+                code=contract.code,
+                name=contract.name,
+                vendor_name=contract.vendor.name,
+                start_date=contract.start_date,
+                end_date=contract.end_date,
+                monthly_fee=contract.monthly_fee,
+                status=contract_service.effective_status(contract),
+            )
+            for contract in covering
+        ],
     )
 
 

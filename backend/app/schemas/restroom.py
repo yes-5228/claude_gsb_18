@@ -1,10 +1,23 @@
 """公厕台账相关数据结构。"""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.constants import RestroomGrade, RestroomStatus
+
+
+class CoveringContract(BaseModel):
+    """公厕详情中展示的当前覆盖合同（精简）。"""
+
+    id: int
+    code: str
+    name: str
+    vendor_name: str = ""
+    start_date: date
+    end_date: date
+    monthly_fee: float = 0.0
+    status: str = ""
 
 
 class RestroomBrief(BaseModel):
@@ -77,3 +90,4 @@ class RestroomDetail(RestroomOut):
     avg_score: float | None = None
     open_issue_count: int = 0
     total_issue_count: int = 0
+    active_contracts: list[CoveringContract] = Field(default_factory=list, description="当前覆盖合同")

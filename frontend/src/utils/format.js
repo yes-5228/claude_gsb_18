@@ -43,7 +43,24 @@ export const STATUS_TONES = {
   已关闭: 'tag-neutral',
   正常: 'tag-success',
   发现问题: 'tag-danger',
+  合作中: 'tag-success',
+  已停用: 'tag-neutral',
+  履约中: 'tag-success',
+  已终止: 'tag-danger',
+  已到期: 'tag-neutral',
+  已考核: 'tag-warning',
+  已结算: 'tag-success',
 };
+
+export function formatMoney(value, options = {}) {
+  const { withSign = false, digits = 2 } = options;
+  const num = Number(value || 0);
+  const sign = withSign && num > 0 ? '+' : '';
+  return `${sign}${num.toLocaleString('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
+}
 
 export const SEVERITY_TONES = {
   一般: 'tag-neutral',

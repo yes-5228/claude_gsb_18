@@ -97,3 +97,52 @@ OPEN_ISSUE_STATUSES: list[str] = [
 
 # 单检查项低于该分数视为不合格项
 INSPECTION_ITEM_PROBLEM_THRESHOLD = 6
+
+
+class VendorStatus(StrEnum):
+    ACTIVE = "合作中"
+    SUSPENDED = "已停用"
+
+
+class ContractStatus(StrEnum):
+    ACTIVE = "履约中"
+    TERMINATED = "已终止"
+    EXPIRED = "已到期"
+
+
+class SettlementStatus(StrEnum):
+    ASSESSED = "已考核"
+    SETTLED = "已结算"
+
+
+# 巡查质量考核：月均分下限（含）到扣款比例，从上到下匹配
+# 如 [85, 90) 扣月费用 1%；无巡查记录当月不扣巡查项
+SCORE_DEDUCTION_RULES: list[tuple[float, float, str]] = [
+    (90, 0.0, "月均分不低于 90 分，不扣款"),
+    (85, 0.01, "月均分 85-90 分，按月费用 1% 扣款"),
+    (80, 0.02, "月均分 80-85 分，按月费用 2% 扣款"),
+    (70, 0.05, "月均分 70-80 分，按月费用 5% 扣款"),
+    (0, 0.10, "月均分低于 70 分，按月费用 10% 扣款"),
+]
+
+# 当月新上报问题按严重程度扣款（元/条）
+ISSUE_NEW_DEDUCTION: dict[str, int] = {
+    IssueSeverity.URGENT.value: 200,
+    IssueSeverity.SERIOUS.value: 100,
+    IssueSeverity.NORMAL.value: 50,
+}
+
+# 考核期末仍超期未闭环的问题扣款（元/条）
+ISSUE_OVERDUE_DEDUCTION = 300
+
+# 验收驳回扣款（元/次）
+ISSUE_REJECT_DEDUCTION = 150
+
+# 自动考核扣款（巡查 + 问题整改）合计不超过月费用的该比例
+MAX_AUTO_DEDUCTION_RATE = 0.30
+
+# 考核等级
+ASSESS_EXCELLENT = "优秀"
+ASSESS_QUALIFIED = "合格"
+ASSESS_BASIC = "基本合格"
+ASSESS_FAIL = "不合格"

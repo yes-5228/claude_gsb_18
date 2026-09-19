@@ -24,6 +24,12 @@ class OverviewStats(BaseModel):
     issue_overdue: int = 0
     issue_done_this_month: int = 0
     rectification_rate: float = Field(default=0.0, description="整改完成率（百分比）")
+    vendor_total: int = 0
+    contract_active: int = 0
+    month_fee_total: float = 0.0
+    month_deduction_total: float = 0.0
+    month_payable_total: float = 0.0
+    settled_count_this_month: int = 0
 
 
 class TrendPoint(BaseModel):

@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import (
     OPEN_ISSUE_STATUSES,
+    ContractStatus,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
     RestroomStatus,
+    SettlementStatus,
 )
-from app.models import Inspection, Issue, Restroom
+from app.models import Contract, Inspection, Issue, Restroom, Settlement, Vendor
 from app.schemas.stats import (
     CategoryStat,
     DashboardStats,
@@ -22,7 +24,7 @@ from app.schemas.stats import (
     RestroomRankItem,
     TrendPoint,
 )
-from app.services import inspection_service, issue_service
+from app.services import contract_service, inspection_service, issue_service
 
 
 def _count(db: Session, model, *conditions) -> int:
@@ -51,6 +53,28 @@ def overview(db: Session) -> OverviewStats:
     closed_count = _count(db, Issue, Issue.status == IssueStatus.CLOSED.value)
     finished = done_count + closed_count
 
+    vendor_total = _count(db, Vendor)
+    all_contracts = list(db.scalars(select(Contract)))
+    active_contracts = [
+        contract
+        for contract in all_contracts
+        if contract_service.effective_status(contract, now.date()) == ContractStatus.ACTIVE.value
+    ]
+    month_rows = list(
+        db.scalars(
+            select(Settlement).where(
+                Settlement.period_year == now.year,
+                Settlement.period_month == now.month,
+            )
+        )
+    )
+    fee_total = sum(row.monthly_fee for row in month_rows)
+    deduction_total = sum(row.total_deduction for row in month_rows)
+    payable_total = sum(row.payable_amount for row in month_rows)
+    settled_count = sum(
+        1 for row in month_rows if row.status == SettlementStatus.SETTLED.value
+    )
+
     return OverviewStats(
         restroom_total=_count(db, Restroom),
         restroom_open=_count(db, Restroom, Restroom.status == RestroomStatus.NORMAL.value),
@@ -74,6 +98,12 @@ def overview(db: Session) -> OverviewStats:
             db, Issue, Issue.status == IssueStatus.DONE.value, Issue.updated_at >= month_start
         ),
         rectification_rate=round(finished / issue_total * 100, 1) if issue_total else 0.0,
+        vendor_total=vendor_total,
+        contract_active=len(active_contracts),
+        month_fee_total=round(fee_total, 2),
+        month_deduction_total=round(deduction_total, 2),
+        month_payable_total=round(payable_total, 2),
+        settled_count_this_month=settled_count,
     )
 
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { issueApi } from '../../api/issues.js';
+import { issueTraceApi } from '../../api/settlements.js';
 import DetailList from '../../components/DetailList.jsx';
 import Field from '../../components/Field.jsx';
 import PageHeader from '../../components/PageHeader.jsx';
@@ -32,6 +33,10 @@ export default function IssueDetailPage() {
     [issueId],
   );
   const { data: options } = useAsync(() => issueApi.transitions(issueId), [issueId]);
+  const { data: traceItems } = useAsync(
+    () => issueTraceApi.settlements(issueId),
+    [issueId],
+  );
 
   const submitTransition = async (payload) => {
     setSaving(true);
@@ -216,6 +221,48 @@ export default function IssueDetailPage() {
               </div>
               <Timeline records={issue.records} />
             </section>
+
+            {traceItems?.length ? (
+              <section className="card">
+                <div className="card-title">
+                  <h3>考核扣款追溯</h3>
+                  <span className="hint">该问题被以下月度考核单计扣</span>
+                </div>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>结算单号</th>
+                        <th>考核月份</th>
+                        <th>承包单位 / 合同</th>
+                        <th>计扣事项</th>
+                        <th>金额（元）</th>
+                        <th>结算状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {traceItems.flatMap((item) =>
+                        item.evidences.map((evidence, index) => (
+                          <tr key={`${item.settlement_id}-${index}`}>
+                            <td>
+                              <Link to={`/contracts/${item.contract_id}`}>{item.settlement_code}</Link>
+                            </td>
+                            <td>{item.period}</td>
+                            <td className="wrap">
+                              {item.vendor_name}
+                              <div className="muted">{item.contract_name}</div>
+                            </td>
+                            <td className="wrap">{evidence.title}</td>
+                            <td className="money-deduct">-{Number(evidence.amount).toFixed(2)}</td>
+                            <td>{item.status}</td>
+                          </tr>
+                        )),
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : null}
           </>
         ) : null}
       </div>

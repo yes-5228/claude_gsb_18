@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { statsApi } from '../../api/stats.js';
 import BarList from '../../components/BarList.jsx';
@@ -92,6 +93,46 @@ export default function DashboardPage() {
                 tone="info"
                 foot={`本月完成 ${overview.issue_done_this_month} 条`}
               />
+            </div>
+
+            <div className="stat-grid">
+              <StatCard
+                label="合作外包单位"
+                value={overview.vendor_total}
+                unit="家"
+                foot={`履约中合同 ${overview.contract_active} 份`}
+              />
+              <StatCard
+                label="本月考核扣款"
+                value={(overview.month_deduction_total || 0).toLocaleString('zh-CN', {
+                  minimumFractionDigits: 2,
+                })}
+                unit="元"
+                tone={overview.month_deduction_total > 0 ? 'warning' : 'primary'}
+                foot="巡查质量 + 问题整改自动计扣"
+              />
+              <StatCard
+                label="本月应付服务费"
+                value={(overview.month_payable_total || 0).toLocaleString('zh-CN', {
+                  minimumFractionDigits: 2,
+                })}
+                unit="元"
+                tone="info"
+                foot={`已结算 ${overview.settled_count_this_month} 份月度单据`}
+              />
+              <div className="stat-card">
+                <div className="label">费用台账</div>
+                <div className="value" style={{ fontSize: 16, lineHeight: 1.8 }}>
+                  <Link className="btn-link" to="/contracts">
+                    合同与考核 →
+                  </Link>
+                  <br />
+                  <Link className="btn-link" to="/settlements">
+                    月度结算台账 →
+                  </Link>
+                </div>
+                <div className="foot">金额与考核结果可互相追溯</div>
+              </div>
             </div>
 
             <div className="grid-2">

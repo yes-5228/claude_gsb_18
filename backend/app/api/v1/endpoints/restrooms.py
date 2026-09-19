@@ -1,6 +1,5 @@
 """公厕台账接口。"""
 
-from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query

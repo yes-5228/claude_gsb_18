@@ -9,13 +9,21 @@ from sqlalchemy.orm import Session
 from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
     INSPECTION_ITEM_MAX_SCORE,
+    ISSUE_NEW_DEDUCTION,
+    ISSUE_OVERDUE_DEDUCTION,
+    ISSUE_REJECT_DEDUCTION,
     ISSUE_TRANSITIONS,
+    MAX_AUTO_DEDUCTION_RATE,
+    SCORE_DEDUCTION_RULES,
+    ContractStatus,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
     RestroomGrade,
     RestroomStatus,
+    SettlementStatus,
     Shift,
+    VendorStatus,
 )
 from app.core.database import get_db
 from app.services import inspection_service
@@ -40,6 +48,10 @@ class Dictionaries(BaseModel):
     inspection_check_items: list[str]
     inspection_item_max_score: int
     issue_transitions: dict[str, list[str]]
+    vendor_status: list[str]
+    contract_status: list[str]
+    settlement_status: list[str]
+    assess_rules: dict
 
 
 @router.get("/dictionaries", response_model=Dictionaries, summary="枚举字典")
@@ -54,6 +66,19 @@ def get_dictionaries() -> Dictionaries:
         inspection_check_items=list(INSPECTION_CHECK_ITEMS),
         inspection_item_max_score=INSPECTION_ITEM_MAX_SCORE,
         issue_transitions={key: list(value) for key, value in ISSUE_TRANSITIONS.items()},
+        vendor_status=[item.value for item in VendorStatus],
+        contract_status=[item.value for item in ContractStatus],
+        settlement_status=[item.value for item in SettlementStatus],
+        assess_rules={
+            "score_rules": [
+                {"min_score": threshold, "rate": rate, "note": note}
+                for threshold, rate, note in SCORE_DEDUCTION_RULES
+            ],
+            "issue_new_deduction": dict(ISSUE_NEW_DEDUCTION),
+            "issue_overdue_deduction": ISSUE_OVERDUE_DEDUCTION,
+            "issue_reject_deduction": ISSUE_REJECT_DEDUCTION,
+            "max_auto_deduction_rate": MAX_AUTO_DEDUCTION_RATE,
+        },
     )
 
 
