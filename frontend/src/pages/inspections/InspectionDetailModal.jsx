@@ -1,16 +1,26 @@
+import { Link } from 'react-router-dom';
+
+import { settlementApi } from '../../api/settlements.js';
+import DataTable from '../../components/DataTable.jsx';
 import Modal from '../../components/Modal.jsx';
 import DetailList from '../../components/DetailList.jsx';
 import { GradeTag, ScorePill, StatusTag } from '../../components/Tags.jsx';
+import { useAsync } from '../../hooks/useAsync.js';
 import { formatDateTime } from '../../utils/format.js';
 
 export default function InspectionDetailModal({ inspection, onClose, onReportIssue }) {
+  const { data: traces } = useAsync(
+    () => (inspection?.id ? settlementApi.traceByInspection(inspection.id) : Promise.resolve([])),
+    [inspection?.id],
+  );
+
   if (!inspection) return null;
 
   return (
     <Modal
       title={`巡查详情 - ${inspection.restroom?.name ?? ''}`}
       onClose={onClose}
-      width={760}
+      width={820}
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>
@@ -52,6 +62,23 @@ export default function InspectionDetailModal({ inspection, onClose, onReportIss
           </div>
         ))}
       </div>
+
+      <div className="section-title">外包考核追溯</div>
+      <DataTable
+        rows={traces || []}
+        emptyText="该巡查暂未纳入月度考核结算"
+        columns={[
+          {
+            key: 'code',
+            title: '结算单号',
+            render: (row) => <Link to={`/settlements/${row.settlement_id}`}>{row.code}</Link>,
+          },
+          { key: 'period_month', title: '考核月份' },
+          { key: 'vendor_name', title: '承包单位' },
+          { key: 'deduction_reason', title: '计入说明', wrap: true },
+          { key: 'status', title: '结算状态' },
+        ]}
+      />
     </Modal>
   );
 }

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { issueApi } from '../../api/issues.js';
+import { settlementApi } from '../../api/settlements.js';
+import DataTable from '../../components/DataTable.jsx';
 import DetailList from '../../components/DetailList.jsx';
 import Field from '../../components/Field.jsx';
 import PageHeader from '../../components/PageHeader.jsx';
@@ -9,7 +11,7 @@ import { OverdueTag, SeverityTag, StatusTag } from '../../components/Tags.jsx';
 import Timeline from '../../components/Timeline.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
-import { formatDateTime } from '../../utils/format.js';
+import { formatDateTime, formatMoney } from '../../utils/format.js';
 import IssueActionModal from './IssueActionModal.jsx';
 import IssueEditModal from './IssueEditModal.jsx';
 
@@ -32,6 +34,7 @@ export default function IssueDetailPage() {
     [issueId],
   );
   const { data: options } = useAsync(() => issueApi.transitions(issueId), [issueId]);
+  const { data: traces } = useAsync(() => settlementApi.traceByIssue(issueId), [issueId]);
 
   const submitTransition = async (payload) => {
     setSaving(true);
@@ -207,6 +210,36 @@ export default function IssueDetailPage() {
                   </div>
                 </form>
               ) : null}
+            </section>
+
+            <section className="card">
+              <div className="card-title">
+                <h3>外包考核扣款追溯</h3>
+                <span className="hint">该问题被纳入月度考核结算单的扣款记录</span>
+              </div>
+              <DataTable
+                rows={traces || []}
+                emptyText="该问题暂未纳入任何月度考核结算"
+                columns={[
+                  { key: 'code', title: '结算单号', render: (row) => (
+                    <Link to={`/settlements/${row.settlement_id}`}>{row.code}</Link>
+                  ) },
+                  { key: 'period_month', title: '考核月份' },
+                  { key: 'vendor_name', title: '承包单位' },
+                  { key: 'contract_name', title: '合同', wrap: true },
+                  {
+                    key: 'deduction',
+                    title: '本问题扣款',
+                    render: (row) => (
+                      <span className={row.deduction > 0 ? 'money-negative' : ''}>
+                        ¥{formatMoney(row.deduction)}
+                      </span>
+                    ),
+                  },
+                  { key: 'deduction_reason', title: '扣款原因', wrap: true },
+                  { key: 'status', title: '结算状态', render: (row) => row.status },
+                ]}
+              />
             </section>
 
             <section className="card">

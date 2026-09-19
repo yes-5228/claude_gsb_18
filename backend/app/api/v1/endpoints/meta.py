@@ -9,13 +9,21 @@ from sqlalchemy.orm import Session
 from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
     INSPECTION_ITEM_MAX_SCORE,
+    ISSUE_DEDUCTION_AMOUNTS,
     ISSUE_TRANSITIONS,
+    OVERDUE_DEDUCTION_AMOUNT,
+    QUALITY_DEDUCTION_TIERS,
+    SETTLEMENT_TRANSITIONS,
+    ContractScopeType,
+    ContractStatus,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
     RestroomGrade,
     RestroomStatus,
+    SettlementStatus,
     Shift,
+    VendorStatus,
 )
 from app.core.database import get_db
 from app.services import inspection_service
@@ -30,6 +38,11 @@ class RestroomOption(BaseModel):
     district: str
 
 
+class QualityTierRule(BaseModel):
+    score_min: float
+    deduction_rate: float
+
+
 class Dictionaries(BaseModel):
     restroom_status: list[str]
     restroom_grade: list[str]
@@ -40,6 +53,14 @@ class Dictionaries(BaseModel):
     inspection_check_items: list[str]
     inspection_item_max_score: int
     issue_transitions: dict[str, list[str]]
+    vendor_status: list[str]
+    contract_status: list[str]
+    contract_scope_type: list[str]
+    settlement_status: list[str]
+    settlement_transitions: dict[str, list[str]]
+    quality_deduction_tiers: list[QualityTierRule]
+    issue_deduction_amounts: dict[str, float]
+    overdue_deduction_amount: float
 
 
 @router.get("/dictionaries", response_model=Dictionaries, summary="枚举字典")
@@ -54,6 +75,19 @@ def get_dictionaries() -> Dictionaries:
         inspection_check_items=list(INSPECTION_CHECK_ITEMS),
         inspection_item_max_score=INSPECTION_ITEM_MAX_SCORE,
         issue_transitions={key: list(value) for key, value in ISSUE_TRANSITIONS.items()},
+        vendor_status=[item.value for item in VendorStatus],
+        contract_status=[item.value for item in ContractStatus],
+        contract_scope_type=[item.value for item in ContractScopeType],
+        settlement_status=[item.value for item in SettlementStatus],
+        settlement_transitions={
+            key: list(value) for key, value in SETTLEMENT_TRANSITIONS.items()
+        },
+        quality_deduction_tiers=[
+            QualityTierRule(score_min=threshold, deduction_rate=rate)
+            for threshold, rate in QUALITY_DEDUCTION_TIERS
+        ],
+        issue_deduction_amounts=dict(ISSUE_DEDUCTION_AMOUNTS),
+        overdue_deduction_amount=OVERDUE_DEDUCTION_AMOUNT,
     )
 
 

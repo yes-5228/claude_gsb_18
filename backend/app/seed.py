@@ -1,25 +1,39 @@
 """演示数据生成：首次启动时写入，便于快速体验各模块。"""
 
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
+    ContractScopeType,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
     RestroomGrade,
     RestroomStatus,
+    SettlementStatus,
     Shift,
 )
 from app.models import Restroom
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
-from app.services import inspection_service, issue_service, restroom_service
+from app.schemas.vendor import (
+    ContractCreate,
+    SettlementCreate,
+    SettlementStatusUpdate,
+    VendorCreate,
+)
+from app.services import (
+    inspection_service,
+    issue_service,
+    restroom_service,
+    settlement_service,
+    vendor_service,
+)
 
 RANDOM_SEED = 20240913
 
@@ -38,6 +52,16 @@ RESTROOM_SPECS = [
 
 INSPECTORS = ["张伟", "刘洋", "胡明月", "邓晨曦", "马晓峰", "杨柳"]
 MANAGERS = ["王秀兰", "李国强", "陈志远", "刘桂芳", "周晓燕", "吴建华", "郑淑珍", "孙鹏"]
+
+# (单位名称, 信用代码, 联系人, 电话, 服务范围类型, 区域列表, 合同月费)
+VENDOR_SPECS = [
+    ("城洁环境服务有限公司", "91330100MA27CJ001A", "周文斌", "13905710001",
+     ContractScopeType.DISTRICT, ["城东区"], 42000.0),
+    ("西城美保物业管理有限公司", "91330100MA27CJ002B", "林雅琴", "13905710002",
+     ContractScopeType.DISTRICT, ["城西区"], 46000.0),
+    ("新城环卫服务集团有限公司", "91330100MA27CJ003C", "高建军", "13905710003",
+     ContractScopeType.RESTROOM, [], 38000.0),
+]
 
 ISSUE_TEMPLATES = {
     IssueCategory.CLEANING: [
@@ -129,7 +153,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
     quality_by_restroom = {room.id: rng.uniform(7.4, 9.8) for room in restrooms}
     inspection_ids: list[tuple[int, int]] = []  # (restroom_id, inspection_id)
 
-    for offset in range(13, -1, -1):
+    for offset in range(44, -1, -1):
         day = now - timedelta(days=offset)
         for room in restrooms:
             if room.status == RestroomStatus.CLOSED:
@@ -183,6 +207,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
                 severity=severity,
                 reporter=summary.inspector,
                 assignee=rng.choice(MANAGERS),
+                report_time=summary.inspect_time,
                 deadline=deadline,
                 initial_remark="由保洁巡查自动生成的问题工单",
             ),
@@ -190,7 +215,98 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
         created += 1
         _advance_issue(db, issue.id, age_days, rng)
 
+    _seed_vendors(db, restrooms, now)
+
     return created
+
+
+def _seed_vendors(db: Session, restrooms: list, now: datetime) -> None:
+    """登记外包单位、合同，并为近两个月生成结算考核台账。"""
+    contract_start = (now - timedelta(days=70)).date().replace(day=1)
+    contract_end = date(now.year + 1, 12, 31)
+
+    named_restrooms = {room.name: room for room in restrooms}
+    restroom_scope = [
+        named_restrooms["滨江新区体育中心公共厕所"].id,
+        named_restrooms["滨江新区政务中心公共厕所"].id,
+        named_restrooms["老城隍庙公共厕所"].id,
+        named_restrooms["老城区第三小学旁公共厕所"].id,
+    ]
+
+    contracts = []
+    for index, (name, license_no, contact, phone, scope_type, districts, fee) in enumerate(
+        VENDOR_SPECS
+    ):
+        vendor = vendor_service.create_vendor(
+            db,
+            VendorCreate(
+                name=name,
+                license_no=license_no,
+                contact_person=contact,
+                contact_phone=phone,
+                address=f"{['城东', '城西', '滨江新区'][index]}环卫基地 2 号楼",
+                remark="年度公厕保洁服务外包定点单位",
+            ),
+        )
+        contract = vendor_service.create_contract(
+            db,
+            ContractCreate(
+                vendor_id=vendor.id,
+                name=f"公厕保洁服务外包合同（{['城东区', '城西区', '新区与老城片区'][index]}）",
+                scope_type=scope_type.value,
+                scope_districts=districts,
+                scope_restroom_ids=restroom_scope if scope_type == ContractScopeType.RESTROOM else [],
+                start_date=contract_start,
+                end_date=contract_end,
+                monthly_fee=fee,
+                payment_terms="次月 15 日前完成考核，凭考核结果与发票 30 日内付款",
+                signed_at=contract_start - timedelta(days=15),
+                remark="月度费用含人工、耗材与垃圾清运，考核扣款后据实结算",
+            ),
+        )
+        contracts.append(contract)
+
+    # 上月：三份合同均已考核并结算；本月：第 1 份已考核、第 2 份待考核、第 3 份已结算
+    last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    this_month = now.strftime("%Y-%m")
+    plan = [
+        (last_month, SettlementStatus.SETTLED.value, "财务科"),
+        (this_month, SettlementStatus.ASSESSED.value, "考核员"),
+    ]
+    _settle(db, contracts[0].id, plan)
+    _settle(
+        db,
+        contracts[1].id,
+        [
+            (last_month, SettlementStatus.SETTLED.value, "财务科"),
+            (this_month, SettlementStatus.PENDING.value, "考核员"),
+        ],
+    )
+    _settle(db, contracts[2].id, [
+        (last_month, SettlementStatus.SETTLED.value, "财务科"),
+        (this_month, SettlementStatus.SETTLED.value, "财务科"),
+    ])
+
+
+def _settle(db: Session, contract_id: int, plan: list[tuple[str, str, str]]) -> None:
+    """按 (月份, 目标状态, 操作人) 生成结算单并推进考核流程。"""
+    for period, target, operator in plan:
+        settlement = settlement_service.create_settlement(
+            db, SettlementCreate(contract_id=contract_id, period_month=period)
+        )
+        if target == SettlementStatus.PENDING.value:
+            continue
+        settlement = settlement_service.assess_settlement(
+            db, settlement.id, operator=operator, remark="依据当月巡查与整改台账自动考核"
+        )
+        if target == SettlementStatus.SETTLED.value:
+            settlement_service.change_status(
+                db,
+                settlement.id,
+                SettlementStatusUpdate(
+                    to_status=SettlementStatus.SETTLED, operator="财务科", remark="扣款后金额已确认"
+                ),
+            )
 
 
 def _advance_issue(db: Session, issue_id: int, age_days: int, rng: random.Random) -> None:

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { inspectionApi } from '../../api/inspections.js';
 import { issueApi } from '../../api/issues.js';
+import { contractApi } from '../../api/contracts.js';
 import { restroomApi } from '../../api/restrooms.js';
 import DataTable from '../../components/DataTable.jsx';
 import DetailList from '../../components/DetailList.jsx';
@@ -11,13 +12,14 @@ import Pagination from '../../components/Pagination.jsx';
 import { ScorePill, SeverityTag, StatusTag } from '../../components/Tags.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useListQuery } from '../../hooks/useListQuery.js';
-import { formatDateTime } from '../../utils/format.js';
+import { formatDateTime, formatDate, formatMoney } from '../../utils/format.js';
 import RestroomFormModal from './RestroomFormModal.jsx';
 
 const TABS = [
   { key: 'profile', label: '基础档案' },
   { key: 'inspections', label: '巡查记录' },
   { key: 'issues', label: '问题记录' },
+  { key: 'contracts', label: '外包合同' },
 ];
 
 export default function RestroomDetailPage() {
@@ -38,6 +40,10 @@ export default function RestroomDetailPage() {
     (params) => issueApi.list({ ...params, restroom_id: restroomId }),
     {},
     5,
+  );
+  const { data: contracts, loading: contractsLoading } = useAsync(
+    () => contractApi.covering(restroomId),
+    [restroomId],
   );
 
   return (
@@ -186,6 +192,47 @@ export default function RestroomDetailPage() {
                   ]}
                 />
                 <Pagination meta={issues.meta} onPageChange={issues.setPage} />
+              </section>
+            ) : null}
+
+            {tab === 'contracts' ? (
+              <section className="card">
+                <div className="card-title">
+                  <h3>保洁外包合同</h3>
+                  <Link className="hint" to="/contracts">
+                    外包合同 →
+                  </Link>
+                </div>
+                <DataTable
+                  loading={contractsLoading}
+                  rows={contracts || []}
+                  emptyText="该公厕暂未纳入任何外包合同服务范围"
+                  columns={[
+                    { key: 'code', title: '合同编号' },
+                    {
+                      key: 'name',
+                      title: '合同名称',
+                      wrap: true,
+                      render: (row) => <Link to={`/contracts/${row.id}`}>{row.name}</Link>,
+                    },
+                    { key: 'vendor', title: '承包单位', render: (row) => row.vendor?.name ?? '-' },
+                    {
+                      key: 'period',
+                      title: '合同期限',
+                      render: (row) => `${formatDate(row.start_date)} ~ ${formatDate(row.end_date)}`,
+                    },
+                    {
+                      key: 'monthly_fee',
+                      title: '月度费用',
+                      render: (row) => `¥${formatMoney(row.monthly_fee)}`,
+                    },
+                    {
+                      key: 'effective_status',
+                      title: '状态',
+                      render: (row) => <StatusTag status={row.effective_status} />,
+                    },
+                  ]}
+                />
               </section>
             ) : null}
           </>
